@@ -7,37 +7,58 @@ import generatePeerId from './util.js';
 const UPDCONNECTIONID_1 = 0x417;
 const UPDCONNECTIONID_2 = 0x27101980;
 const PORT = 6681;
+const TRIES = 8;
 
 const getPeers = (torrent) => {
-  const clientSocket = dgram.createSocket('udp4');
+  return new Promise((resolve, reject) => {
+    const clientSocket = dgram.createSocket('udp4');
 
-  const trackerUrl = url.parse(decodingTorrent(torrent.announce));
+    const trackerUrl = url.parse(decodingTorrent(torrent.announce));
 
-  sendRequest(clientSocket, connectionRequest(), trackerUrl);
+    sendRequest(clientSocket, connectionRequest(), trackerUrl, 0);
 
-  clientSocket.on('message', (res) => {
-    if (res.readUint32BE(0) == 0) {
-      console.log('connection response');
+    clientSocket.on('message', (res) => {
+      try {
+        if (res.readUint32BE(0) == 0) {
+          console.log('connection response');
 
-      const response = parseConnectionResponse(res);
-      const announceReq = announceRequest(response.connectionId, torrent);
-      sendRequest(clientSocket, announceReq, trackerUrl);
-    } else if (res.readUint32BE(0) == 1) {
-      console.log('announce response');
-      const response = parseAnnounceResponse(res);
-      console.log(response);
-    }
+          const response = parseConnectionResponse(res);
+          const announceReq = announceRequest(response.connectionId, torrent);
+          sendRequest(clientSocket, announceReq, trackerUrl);
+        } else if (res.readUint32BE(0) == 1) {
+          console.log('announce response');
+          const response = parseAnnounceResponse(res);
+
+          resolve(response.peers);
+        }
+      } catch (err) {
+        clientSocket.close();
+        reject(err);
+      }
+    });
+
+    clientSocket.on('error', (err) => {
+      clientSocket.close();
+      reject(err);
+    });
   });
 };
 
-const sendRequest = (clientSocket, message, trackerUrl) => {
-  clientSocket.send(message, trackerUrl.port, trackerUrl.hostname, (err) => {
-    if (err) {
-      console.log(`Error in Message Sending: ${err}`);
-    } else {
-      console.log('Message Sent');
-    }
-  });
+const sendRequest = (clientSocket, message, trackerUrl, currTry = 0) => {
+  const sendingRequest = (currTry) => {
+    clientSocket.send(message, trackerUrl.port, trackerUrl.hostname, (err) => {
+      if (err) {
+        console.log(`Error in sending message during try ${currTry}: ${err}`);
+        if (currTry + 1 < TRIES) {
+          sendingRequest(currTry + 1);
+        }
+      } else {
+        console.log('Message Sent');
+      }
+    });
+  };
+
+  sendingRequest(currTry);
 };
 
 const connectionRequest = () => {
