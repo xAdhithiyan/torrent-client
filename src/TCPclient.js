@@ -2,10 +2,11 @@ import net from 'net';
 import { Buffer } from 'buffer';
 import buildMessage from './buildMessage.js';
 import messageHandler from './messageHandlers.js';
+import queueState from './queueState.js';
 
-const download = (peer, torrent, pieces) => {
+const download = (peer, torrent, pieces, file) => {
   const clientSocket = net.Socket();
-  const queue = { choked: true, queue: [] };
+  const queue = queueState(torrent);
 
   clientSocket.connect(peer.port, peer.ip, () => {
     //console.log('connected to TCP peer server');
@@ -14,7 +15,7 @@ const download = (peer, torrent, pieces) => {
   });
 
   wholeMessage(clientSocket, (msg) => {
-    msgHandler(msg, clientSocket, queue, pieces);
+    msgHandler(msg, clientSocket, queue, pieces, file, torrent);
   });
 
   clientSocket.on('error', (err) => {
@@ -49,9 +50,9 @@ const wholeMessage = (clientSocket, callback) => {
   });
 };
 
-const msgHandler = (msg, clientSocket, queue, pieces) => {
+const msgHandler = (msg, clientSocket, queue, pieces, file, torrent) => {
   if (isHandshake(msg)) {
-    //console.log('----', msg.toString('utf8'));
+    console.log('handshake verified');
     clientSocket.write(buildMessage.intrested());
   } else {
     const parsedResponse = parseResponse(msg);
@@ -63,17 +64,33 @@ const msgHandler = (msg, clientSocket, queue, pieces) => {
         messageHandler.unchokeHandler(clientSocket, pieces, queue);
         break;
       case 4:
-        console.log('hi');
-        messageHandler.haveHandler(parseResponse.payload, queue, clientSocket);
+        messageHandler.haveHandler(
+          clientSocket,
+          pieces,
+          queue,
+          parsedResponse.payload,
+        );
         break;
       case 5:
-        messageHandler.bitfieldHandler(parseResponse.payload);
+        messageHandler.bitfieldHandler(
+          clientSocket,
+          pieces,
+          queue,
+          parsedResponse.payload,
+        );
         break;
       case 7:
-        messageHandler.PeiceHandler(parseResponse.payload, queue, clientSocket);
+        messageHandler.peiceHandler(
+          clientSocket,
+          pieces,
+          queue,
+          parsedResponse.payload,
+          file,
+          torrent,
+        );
         break;
       default:
-        console.log('default');
+      //console.log('default');
     }
   }
 };
@@ -83,7 +100,7 @@ const isHandshake = (msg) =>
   msg.toString('utf8', 1, 20) == 'BitTorrent protocol';
 
 const parseResponse = (msg) => {
-  const size = msg.readInt32BE(0);
+  const size = msg.length > 3 ? msg.readInt32BE(0) : null;
   const id = msg.length > 4 ? msg.readUInt8(4) : null;
   let payload = msg.length > 5 ? msg.slice(5) : null;
 

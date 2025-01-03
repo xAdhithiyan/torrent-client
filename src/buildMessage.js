@@ -48,7 +48,7 @@ const buildHave = (payload) => {
   return msg;
 };
 
-const buildBitfield = (payload) => {};
+//const buildBitfield = (payload) => {};
 
 const buildRequest = (payload) => {
   const msg = Buffer.alloc(17);

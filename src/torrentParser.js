@@ -3,13 +3,14 @@ import bencode from 'bencode';
 import crypto from 'crypto';
 import path from 'path';
 import bignum from 'bignum';
-import BigNum from 'bignum';
 
 const BLOCK_LEN = Math.pow(2, 14);
 
 const openTorrent = (file) => {
   return bencode.decode(fs.readFileSync(path.resolve(file)));
 };
+
+const openDestination = (path) => fs.openSync(path, 'w');
 
 const infoHash = (torrent) => {
   const info = bencode.encode(torrent.info);
@@ -52,6 +53,7 @@ const blockLen = (torrent, pieceIndex, blockIndex) => {
 
 export {
   openTorrent,
+  openDestination,
   infoHash,
   torrentSize,
   pieceLen,

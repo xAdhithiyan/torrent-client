@@ -1,25 +1,38 @@
-const pieceState = (size) => {
-  const requested = new Array(size).fill(false);
-  const recieved = new Array(size).fill(false);
+import { blockPerPiece, BLOCK_LEN } from './torrentParser.js';
 
-  const addRequested = (index) => {
-    requested[index] = true;
+const pieceState = (torrent) => {
+  const buildPieceArray = () => {
+    const totalPieces = torrent.info.pieces.length / 20;
+    const arr = new Array(totalPieces).fill(null);
+    return arr.map((i, index) =>
+      new Array(blockPerPiece(torrent, index)).fill(false),
+    );
   };
 
-  const addRecieved = (index) => {
-    recieved[index] = true;
+  let requested = buildPieceArray();
+  const recieved = buildPieceArray();
+
+  const addRequested = (pieceBlock) => {
+    const blockIndex = pieceBlock.begin / BLOCK_LEN;
+    requested[pieceBlock.index][blockIndex] = true;
   };
 
-  const needed = (index) => {
-    if (requested.every((i) => i == true)) {
-      requested.length = 0;
-      requested.push(...recieved);
+  const addRecieved = (pieceBlock) => {
+    const blockIndex = pieceBlock.begin / BLOCK_LEN;
+    recieved[pieceBlock.index][blockIndex] = true;
+  };
+
+  const needed = (pieceBlock) => {
+    if (requested.every((block) => block.every((i) => i))) {
+      requested = recieved.map((block) => block.slice());
     }
-    return requested[index];
+
+    const blockIndex = pieceBlock.begin / BLOCK_LEN;
+    return !requested[pieceBlock.index][blockIndex];
   };
 
   const isDone = () => {
-    return recieved.every((i) => i == true);
+    return requested.every((block) => block.every((i) => i));
   };
 
   return {
